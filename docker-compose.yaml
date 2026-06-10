@@ -1,0 +1,40 @@
+services:
+  barcode-hub:
+    build:
+      context: .
+      args:
+        VERSION: "0.1.0"
+        BUILD: "compose"
+        VCS_REF: "000000"
+        CREATED: "local"
+    image: barcode-hub:local
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    environment:
+      BARCODE_HUB_APP__HOST: "0.0.0.0"
+      BARCODE_HUB_APP__PORT: "8080"
+      BARCODE_HUB_APP__ADMIN_HOST: "0.0.0.0"
+      BARCODE_HUB_APP__ADMIN_PORT: "8081"
+      BARCODE_HUB_BUILD__VERSION: "0.1.0"
+      BARCODE_HUB_BUILD__BUILD: "compose"
+      BARCODE_HUB_BUILD__COMMIT: "000000"
+      BARCODE_HUB_LIMITS__MAX_REQUEST_BODY_BYTES: "16777216"
+      BARCODE_HUB_LIMITS__MAX_FILE_BYTES: "8388608"
+      BARCODE_HUB_LIMITS__MAX_IMAGE_SIDE_PIXELS: "4096"
+      BARCODE_HUB_DECODE__ENABLED_METHODS: '["GET","POST","PUT"]'
+      BARCODE_HUB_DECODE__DEFAULT_FORMATS: '["EAN13","EAN8","UPCA","UPCE"]'
+      BARCODE_HUB_DECODE__ALLOWED_FORMATS: '["EAN13","EAN8","UPCA","UPCE","QRCode","DataMatrix"]'
+      BARCODE_HUB_DECODE__REQUEST_TIMEOUT_SECONDS: "10"
+      BARCODE_HUB_DECODE__TRY_ROTATE: "true"
+      BARCODE_HUB_DECODE__TRY_DOWNSCALE: "true"
+      BARCODE_HUB_DECODE__TRY_INVERT: "false"
+      BARCODE_HUB_DECODE__RETURN_ERRORS: "true"
+      BARCODE_HUB_FETCH__TIMEOUT_SECONDS: "5"
+      BARCODE_HUB_FETCH__ALLOWED_URL_PREFIXES: '["http://*","https://*","data:*","file://*"]'
+      BARCODE_HUB_MEDIA__ALLOWED_CONTENT_TYPES: '["image/png","image/jpeg","image/webp","image/gif","image/bmp","image/tiff"]'
+      BARCODE_HUB_MCP__ENABLED: "true"
+      BARCODE_HUB_LOGGING__FORMAT: "human"
+      BARCODE_HUB_LOGGING__LEVEL: "INFO"
+    restart: unless-stopped
+
