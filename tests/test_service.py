@@ -95,6 +95,48 @@ def test_disabled_method_returns_405():
     assert response.json()["error"]["code"] == "method_disabled"
 
 
+def test_root_index_shows_server_info_and_resource_links():
+    settings = Settings(
+        build=BuildConfig(version="1.2.3", build="local", commit="fedcba987"),
+        decode=DecodeConfig(
+            enabled_methods=["GET", "PUT"],
+            default_formats=["EAN13"],
+            allowed_formats=["EAN13", "QRCode"],
+        ),
+        media=MediaConfig(allowed_content_types=["image/png"]),
+        mcp=McpConfig(enabled=False),
+    )
+    client = TestClient(create_app(settings, Metrics(settings), FakeDecodeService()))
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["server"] == "Barcode-Hub 1.2.3 (local fedcba)"
+    assert "Barcode Hub" in response.text
+    assert "Barcode-Hub 1.2.3 (local fedcba)" in response.text
+    assert "GET, PUT" in response.text
+    assert "EAN13, QRCode" in response.text
+    assert "image/png" in response.text
+    assert 'href="/docs#/decode"' in response.text
+    assert 'href="/docs"' in response.text
+    assert 'href="/redoc"' in response.text
+    assert 'href="/openapi.json"' in response.text
+    assert 'href="/health"' in response.text
+    assert 'href="/metrics"' in response.text
+    assert 'href="/mcp"' not in response.text
+
+
+def test_root_index_links_mcp_when_enabled():
+    settings = Settings(mcp=McpConfig(enabled=True))
+    client = TestClient(create_app(settings, Metrics(settings), FakeDecodeService()))
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'href="/mcp"' in response.text
+
+
 def test_openapi_json_reflects_runtime_decode_settings():
     settings = Settings(
         build=BuildConfig(version="9.8.7", build="test", commit="abcdef123"),

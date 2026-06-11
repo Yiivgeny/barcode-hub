@@ -25,6 +25,7 @@ response, but it is not part of the OpenAPI or MCP contracts.
 
 Single service port, default `8080`:
 
+- `GET /` shows a small HTML server index with build info and resource links
 - `GET /decode?url=...&types=EAN13,UPCA`
 - `POST /decode` with exactly one `multipart/form-data` image file
 - `PUT /decode` with raw image bytes and an `image/*` Content-Type

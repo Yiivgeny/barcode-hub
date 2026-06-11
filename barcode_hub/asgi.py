@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import contextlib
+import html
 import logging
 import time
 from pathlib import Path
@@ -11,7 +12,7 @@ from typing import Any
 import yaml
 from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from barcode_hub.config import Settings, load_settings
@@ -76,7 +77,7 @@ def create_app(
 
     _install_common_handlers(app, settings)
     _install_api_routes(app, settings, metrics, decode_service, fetcher)
-    _install_service_routes(app, metrics)
+    _install_service_routes(app, settings, metrics)
     _install_openapi(app, settings)
 
     if mcp_server is not None:
@@ -85,7 +86,11 @@ def create_app(
     return app
 
 
-def _install_service_routes(app: FastAPI, metrics: Metrics) -> None:
+def _install_service_routes(app: FastAPI, settings: Settings, metrics: Metrics) -> None:
+    @app.get("/", response_class=HTMLResponse)
+    async def index() -> HTMLResponse:
+        return HTMLResponse(_server_index_html(settings))
+
     @app.get("/health")
     async def health() -> JSONResponse:
         status_code, payload = health_payload()
@@ -94,6 +99,125 @@ def _install_service_routes(app: FastAPI, metrics: Metrics) -> None:
     @app.get("/metrics")
     async def prometheus_metrics() -> Response:
         return Response(metrics.render(), media_type=CONTENT_TYPE_LATEST)
+
+
+def _server_index_html(settings: Settings) -> str:
+    def esc(value: object) -> str:
+        return html.escape(str(value), quote=True)
+
+    decode_methods = ", ".join(settings.decode.enabled_methods) or "none"
+    barcode_formats = ", ".join(settings.decode.allowed_formats) or "none"
+    media_types = ", ".join(settings.media.allowed_content_types) or "none"
+
+    resources = [
+        ("Decode API", "/docs#/decode", f"Enabled methods: {decode_methods}"),
+        ("Swagger UI", "/docs", "Interactive OpenAPI documentation"),
+        ("ReDoc", "/redoc", "Alternative OpenAPI documentation"),
+        ("OpenAPI JSON", "/openapi.json", "Runtime schema generated from current settings"),
+        ("Health", "/health", "ZXing-C++ dependency check"),
+        ("Metrics", "/metrics", "Prometheus metrics"),
+    ]
+    if settings.mcp.enabled:
+        resources.append(("MCP", "/mcp", "Streamable HTTP MCP endpoint"))
+
+    resource_items = "\n".join(
+        f'<li><a href="{esc(path)}">{esc(path)}</a>'
+        f"<strong>{esc(name)}</strong><span>{esc(description)}</span></li>"
+        for name, path, description in resources
+    )
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Barcode Hub</title>
+  <style>
+    :root {{ color-scheme: light dark; }}
+    body {{
+      margin: 0;
+      font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #1f2937;
+      background: #f6f8fa;
+    }}
+    main {{
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }}
+    h1 {{ margin: 0 0 6px; font-size: 28px; }}
+    h2 {{ margin: 28px 0 12px; font-size: 18px; }}
+    p {{ margin: 0 0 18px; color: #4b5563; }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid #d0d7de;
+    }}
+    th, td {{
+      padding: 10px 12px;
+      border-bottom: 1px solid #d0d7de;
+      text-align: left;
+      vertical-align: top;
+    }}
+    th {{ width: 160px; color: #57606a; font-weight: 600; }}
+    ul {{
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      border: 1px solid #d0d7de;
+      background: #fff;
+    }}
+    li {{
+      display: grid;
+      grid-template-columns: minmax(140px, 220px) 1fr;
+      gap: 6px 18px;
+      padding: 12px;
+      border-bottom: 1px solid #d0d7de;
+    }}
+    li:last-child, tr:last-child th, tr:last-child td {{ border-bottom: 0; }}
+    a {{ color: #0969da; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }}
+    strong {{ display: block; }}
+    span {{ color: #57606a; }}
+    code {{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }}
+    @media (prefers-color-scheme: dark) {{
+      body {{ color: #e6edf3; background: #0d1117; }}
+      p, span, th {{ color: #8b949e; }}
+      table, ul {{ background: #161b22; border-color: #30363d; }}
+      th, td, li {{ border-color: #30363d; }}
+      a {{ color: #58a6ff; }}
+    }}
+    @media (max-width: 640px) {{
+      li {{ grid-template-columns: 1fr; }}
+      th {{ width: 120px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Barcode Hub</h1>
+    <p>ZXing-C++ backed barcode recognition service.</p>
+
+    <h2>Server</h2>
+    <table>
+      <tr><th>Version</th><td><code>{esc(settings.build.version)}</code></td></tr>
+      <tr><th>Build</th><td><code>{esc(settings.build.build)}</code></td></tr>
+      <tr><th>Commit</th><td><code>{esc(settings.build.commit6)}</code></td></tr>
+      <tr><th>Server header</th><td><code>{esc(settings.build.server_header_value)}</code></td></tr>
+      <tr><th>Decode methods</th><td><code>{esc(decode_methods)}</code></td></tr>
+      <tr><th>Barcode formats</th><td>{esc(barcode_formats)}</td></tr>
+      <tr><th>Input media types</th><td>{esc(media_types)}</td></tr>
+      <tr><th>MCP</th><td><code>{esc("enabled" if settings.mcp.enabled else "disabled")}</code></td></tr>
+    </table>
+
+    <h2>Resources</h2>
+    <ul>
+      {resource_items}
+    </ul>
+  </main>
+</body>
+</html>
+"""
 
 
 def _install_common_handlers(app: FastAPI, settings: Settings) -> None:
