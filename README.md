@@ -23,18 +23,15 @@ response, but it is not part of the OpenAPI or MCP contracts.
 
 ## Endpoints
 
-Public port, default `8080`:
+Single service port, default `8080`:
 
 - `GET /decode?url=...&types=EAN13,UPCA`
 - `POST /decode` with exactly one `multipart/form-data` image file
 - `PUT /decode` with raw image bytes and an `image/*` Content-Type
-- `/mcp` when MCP is enabled
-- `/docs`, `/redoc`, `/openapi.json`
-
-Admin port, default `8081`:
-
 - `GET /health` checks that `zxingcpp` is importable and exposes the required API
 - `GET /metrics` exposes Prometheus metrics
+- `/mcp` when MCP is enabled
+- `/docs`, `/redoc`, `/openapi.json`
 
 ## Run Locally
 
@@ -68,7 +65,7 @@ curl -X PUT --data-binary @image.jpg -H 'Content-Type: image/jpeg' \
 
 ```bash
 docker build -t barcode-hub:local .
-docker run --rm -p 8080:8080 -p 8081:8081 barcode-hub:local
+docker run --rm -p 8080:8080 barcode-hub:local
 ```
 
 Or:
@@ -88,7 +85,6 @@ Example YAML:
 ```yaml
 app:
   port: 8080
-  admin_port: 8081
 limits:
   max_request_body_bytes: 16777216
   max_file_bytes: 8388608

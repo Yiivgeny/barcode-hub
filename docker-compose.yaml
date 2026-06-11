@@ -10,12 +10,9 @@ services:
     image: barcode-hub:local
     ports:
       - "8080:8080"
-      - "8081:8081"
     environment:
       BARCODE_HUB_APP__HOST: "0.0.0.0"
       BARCODE_HUB_APP__PORT: "8080"
-      BARCODE_HUB_APP__ADMIN_HOST: "0.0.0.0"
-      BARCODE_HUB_APP__ADMIN_PORT: "8081"
       BARCODE_HUB_BUILD__VERSION: "0.1.0"
       BARCODE_HUB_BUILD__BUILD: "compose"
       BARCODE_HUB_BUILD__COMMIT: "000000"
@@ -37,4 +34,3 @@ services:
       BARCODE_HUB_LOGGING__FORMAT: "human"
       BARCODE_HUB_LOGGING__LEVEL: "INFO"
     restart: unless-stopped
-

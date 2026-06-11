@@ -18,8 +18,6 @@ DEFAULT_CONFIG_PATH = "/etc/barcode-hub/config.yaml"
 class AppConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8080
-    admin_host: str = "0.0.0.0"
-    admin_port: int = 8081
 
 
 class BuildConfig(BaseModel):
@@ -187,4 +185,3 @@ class Settings(BaseSettings):
 
 def load_settings() -> Settings:
     return Settings()
-

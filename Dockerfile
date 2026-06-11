@@ -32,10 +32,9 @@ RUN pip install --no-cache-dir . \
 
 USER barcode
 
-EXPOSE 8080 8081
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import json, urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=3); raise SystemExit(0 if json.load(r).get('status') == 'ok' else 1)"
+    CMD python -c "import json, urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3); raise SystemExit(0 if json.load(r).get('status') == 'ok' else 1)"
 
 CMD ["barcode-hub"]
-

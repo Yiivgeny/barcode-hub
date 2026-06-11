@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from barcode_hub.asgi import create_admin_app, create_app
+from barcode_hub.asgi import create_app
 from barcode_hub.config import BuildConfig, DecodeConfig, McpConfig, MediaConfig, Settings
 from barcode_hub.metrics import Metrics
 from barcode_hub.models import BarcodeResult, DecodeResult
@@ -164,10 +164,10 @@ def test_get_decode_accepts_data_url_base64():
     assert response.json()["barcodes"][0]["type"] == "EAN13"
 
 
-def test_admin_health_and_metrics_have_server_header():
+def test_health_and_metrics_are_served_by_main_app_with_server_header():
     settings = Settings(mcp=McpConfig(enabled=False))
     metrics = Metrics(settings)
-    client = TestClient(create_admin_app(settings, metrics))
+    client = TestClient(create_app(settings, metrics, FakeDecodeService()))
 
     with patch(
         "barcode_hub.health.check_zxing_cpp",

@@ -76,6 +76,7 @@ def create_app(
 
     _install_common_handlers(app, settings)
     _install_api_routes(app, settings, metrics, decode_service, fetcher)
+    _install_service_routes(app, metrics)
     _install_openapi(app, settings)
 
     if mcp_server is not None:
@@ -84,14 +85,7 @@ def create_app(
     return app
 
 
-def create_admin_app(settings: Settings | None = None, metrics: Metrics | None = None) -> FastAPI:
-    settings = settings or load_settings()
-    metrics = metrics or Metrics(settings)
-    app = FastAPI(title="Barcode Hub Admin", docs_url=None, redoc_url=None, openapi_url=None)
-    app.state.settings = settings
-    app.state.metrics = metrics
-    _install_common_handlers(app, settings)
-
+def _install_service_routes(app: FastAPI, metrics: Metrics) -> None:
     @app.get("/health")
     async def health() -> JSONResponse:
         status_code, payload = health_payload()
@@ -100,8 +94,6 @@ def create_admin_app(settings: Settings | None = None, metrics: Metrics | None =
     @app.get("/metrics")
     async def prometheus_metrics() -> Response:
         return Response(metrics.render(), media_type=CONTENT_TYPE_LATEST)
-
-    return app
 
 
 def _install_common_handlers(app: FastAPI, settings: Settings) -> None:
