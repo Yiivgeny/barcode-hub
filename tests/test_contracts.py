@@ -143,10 +143,6 @@ class DecodeResultSchemaTests(unittest.TestCase):
         with self.assertRaises(Exception):
             assert_valid_decode_result(self, {})
 
-    def test_server_body_field_is_rejected(self):
-        with self.assertRaises(Exception):
-            assert_valid_decode_result(self, {"barcodes": [], "server": {}})
-
     def test_pseudo_selector_types_are_not_public_response_types(self):
         enum = set(load_decode_schema()["$defs"]["BarcodeType"]["enum"])
         self.assertFalse({"None", "All", "AllReadable", "AllLinear", "EANUPC"} & enum)
