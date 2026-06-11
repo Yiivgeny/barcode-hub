@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import contextlib
 import logging
 import time
@@ -33,6 +34,7 @@ from barcode_hub.models import DecodeResult
 
 LOGGER = logging.getLogger(__name__)
 SPEC_DIR = Path(__file__).resolve().parents[1] / "spec"
+DECODE_METHODS = ("get", "post", "put")
 
 
 def create_app(
@@ -45,7 +47,11 @@ def create_app(
     metrics = metrics or Metrics(settings)
     decode_service = decode_service or DecodeService(settings, metrics)
     fetcher = fetcher or ResourceFetcher(settings, metrics)
-    mcp_server = _build_mcp_server(settings, metrics, decode_service, fetcher) if settings.mcp.enabled else None
+    mcp_server = (
+        _build_mcp_server(settings, metrics, decode_service, fetcher)
+        if settings.mcp.enabled
+        else None
+    )
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -70,7 +76,7 @@ def create_app(
 
     _install_common_handlers(app, settings)
     _install_api_routes(app, settings, metrics, decode_service, fetcher)
-    _install_openapi(app)
+    _install_openapi(app, settings)
 
     if mcp_server is not None:
         app.mount("/mcp", mcp_server.streamable_http_app())
@@ -122,7 +128,9 @@ def _install_common_handlers(app: FastAPI, settings: Settings) -> None:
         return JSONResponse(exc.response_body(), status_code=exc.status_code)
 
     @app.exception_handler(RequestValidationError)
-    async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    async def validation_error_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
         return JSONResponse(
             BadRequestError("Request validation failed.", {"errors": exc.errors()}).response_body(),
             status_code=400,
@@ -166,11 +174,15 @@ def _install_api_routes(
         if not request.headers.get("content-type", "").lower().startswith("multipart/form-data"):
             raise UnsupportedMediaTypeError("POST /decode expects multipart/form-data.")
         form = await request.form()
-        uploads = [value for _, value in form.multi_items() if isinstance(value, StarletteUploadFile)]
+        uploads = [
+            value for _, value in form.multi_items() if isinstance(value, StarletteUploadFile)
+        ]
         if len(uploads) != 1:
             raise BadRequestError("POST /decode accepts exactly one uploaded file.")
         upload = uploads[0]
-        if not is_allowed_image_content_type(upload.content_type, settings.media.allowed_content_types):
+        if not is_allowed_image_content_type(
+            upload.content_type, settings.media.allowed_content_types
+        ):
             raise UnsupportedMediaTypeError("Only configured image/* content types are accepted.")
         data = await upload.read()
         if len(data) > settings.limits.max_request_body_bytes:
@@ -178,7 +190,11 @@ def _install_api_routes(
 
         async def work() -> DecodeResult:
             return await decode_service.decode_bytes(
-                data, requested_types, interaction="post_multipart", source="upload", limit_status=413
+                data,
+                requested_types,
+                interaction="post_multipart",
+                source="upload",
+                limit_status=413,
             )
 
         return await _run_decode_interaction(settings, metrics, "post_multipart", work)
@@ -233,7 +249,7 @@ def _parse_requested_types(settings: Settings, types: str | None) -> list[str]:
     return settings.ensure_requested_types_allowed(requested)
 
 
-def _install_openapi(app: FastAPI) -> None:
+def _install_openapi(app: FastAPI, settings: Settings) -> None:
     openapi_path = next(
         path
         for path in (SPEC_DIR / "openapi.yaml", Path.cwd() / "spec" / "openapi.yaml")
@@ -243,10 +259,81 @@ def _install_openapi(app: FastAPI) -> None:
     def custom_openapi() -> dict[str, Any]:
         if app.openapi_schema:
             return app.openapi_schema
-        app.openapi_schema = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
+        base_schema = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
+        app.openapi_schema = _runtime_openapi_schema(base_schema, settings)
         return app.openapi_schema
 
     app.openapi = custom_openapi  # type: ignore[method-assign]
+
+
+def _runtime_openapi_schema(base_schema: dict[str, Any], settings: Settings) -> dict[str, Any]:
+    schema = copy.deepcopy(base_schema)
+    _apply_openapi_info(schema, settings)
+    _apply_openapi_decode_methods(schema, settings)
+    _apply_openapi_barcode_formats(schema, settings)
+    _apply_openapi_media_types(schema, settings)
+    return schema
+
+
+def _apply_openapi_info(schema: dict[str, Any], settings: Settings) -> None:
+    info = schema.get("info")
+    if isinstance(info, dict):
+        info["version"] = settings.build.version
+
+
+def _apply_openapi_decode_methods(schema: dict[str, Any], settings: Settings) -> None:
+    decode_path = schema.get("paths", {}).get("/decode")
+    if not isinstance(decode_path, dict):
+        return
+
+    enabled_methods = {method.lower() for method in settings.decode.enabled_methods}
+    for method in DECODE_METHODS:
+        if method not in enabled_methods:
+            decode_path.pop(method, None)
+
+    if not any(method in decode_path for method in DECODE_METHODS):
+        schema["paths"].pop("/decode", None)
+
+
+def _apply_openapi_barcode_formats(schema: dict[str, Any], settings: Settings) -> None:
+    barcode_type = schema.get("components", {}).get("schemas", {}).get("BarcodeType")
+    if isinstance(barcode_type, dict):
+        barcode_type["enum"] = list(settings.decode.allowed_formats)
+
+
+def _apply_openapi_media_types(schema: dict[str, Any], settings: Settings) -> None:
+    allowed_content_types = list(settings.media.allowed_content_types)
+    url_parameter = schema.get("components", {}).get("parameters", {}).get("Url")
+    if isinstance(url_parameter, dict):
+        description = url_parameter.get("description", "")
+        url_parameter["description"] = (
+            f"{description}\n\nFetched resource Content-Type must be one of: "
+            f"{', '.join(allowed_content_types)}."
+        )
+
+    decode_path = schema.get("paths", {}).get("/decode")
+    if not isinstance(decode_path, dict):
+        return
+
+    post = decode_path.get("post")
+    if isinstance(post, dict):
+        multipart = post.get("requestBody", {}).get("content", {}).get("multipart/form-data")
+        if isinstance(multipart, dict):
+            multipart.setdefault("encoding", {}).setdefault("file", {})["contentType"] = ", ".join(
+                allowed_content_types
+            )
+
+    put = decode_path.get("put")
+    if isinstance(put, dict):
+        content = put.get("requestBody", {}).get("content")
+        if isinstance(content, dict):
+            binary_schema = content.get("image/*", {}).get(
+                "schema",
+                {"type": "string", "format": "binary", "description": "Raw image bytes to decode."},
+            )
+            content.clear()
+            for content_type in allowed_content_types:
+                content[content_type] = {"schema": copy.deepcopy(binary_schema)}
 
 
 def _build_mcp_server(

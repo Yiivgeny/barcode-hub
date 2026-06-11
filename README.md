@@ -166,6 +166,11 @@ ruff check .
 The shared response schema is `spec/decode-result.schema.json`. The OpenAPI
 contract is `spec/openapi.yaml`. The MCP contract is `spec/mcp.md`.
 
+Runtime `/openapi.json` is loaded from `spec/openapi.yaml` and then narrowed by
+the active configuration: disabled `/decode` methods are removed, `BarcodeType`
+is limited to `decode.allowed_formats`, and request media types reflect
+`media.allowed_content_types`. Swagger UI and ReDoc use that runtime schema.
+
 `DecodeResult`, `Barcode`, `BarcodeType`, and `BarcodeValidity` are generated
 from the Python models and format enum:
 
