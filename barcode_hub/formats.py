@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 import re
 
 
@@ -63,6 +64,8 @@ PSEUDO_TYPES = {
     "MatrixCodes",
     "Any",
 }
+
+BarcodeType = Enum("BarcodeType", {barcode_type: barcode_type for barcode_type in BARCODE_TYPES}, type=str)
 
 
 def _key(value: str) -> str:
@@ -128,4 +131,3 @@ def parse_types_query(value: str | None) -> list[str] | None:
     if value is None or value.strip() == "":
         return None
     return canonicalize_barcode_types([part.strip() for part in value.split(",") if part.strip()])
-

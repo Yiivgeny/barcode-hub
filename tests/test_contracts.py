@@ -1,5 +1,7 @@
 import json
 import re
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -77,6 +79,16 @@ def assert_valid_decode_result(testcase: unittest.TestCase, instance: dict) -> N
 
 
 class DecodeResultSchemaTests(unittest.TestCase):
+    def test_generated_contract_files_are_current(self):
+        result = subprocess.run(
+            [sys.executable, "scripts/generate_contract.py", "--check"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_empty_success_result_is_valid(self):
         assert_valid_decode_result(self, {"barcodes": []})
 

@@ -158,6 +158,7 @@ semantics and stable domain codes in the message, such as `invalid_url`,
 
 ```bash
 pip install -e '.[dev]'
+python scripts/generate_contract.py --check
 pytest
 ruff check .
 ```
@@ -165,8 +166,18 @@ ruff check .
 The shared response schema is `spec/decode-result.schema.json`. The OpenAPI
 contract is `spec/openapi.yaml`. The MCP contract is `spec/mcp.md`.
 
+`DecodeResult`, `Barcode`, `BarcodeType`, and `BarcodeValidity` are generated
+from the Python models and format enum:
+
+```bash
+python scripts/generate_contract.py
+```
+
+The generator updates `spec/decode-result.schema.json` and only the marked
+`components.schemas` block in `spec/openapi.yaml`. Paths, request/response
+semantics, examples, and MCP documentation remain hand-authored.
+
 ## License
 
 Barcode Hub is MIT licensed. `zxing-cpp` is Apache-2.0 licensed; keep upstream
 notices when redistributing images or derived distributions.
-
