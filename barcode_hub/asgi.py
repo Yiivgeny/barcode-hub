@@ -203,7 +203,6 @@ def _server_index_html(settings: Settings) -> str:
       <tr><th>Version</th><td><code>{esc(settings.build.version)}</code></td></tr>
       <tr><th>Build</th><td><code>{esc(settings.build.build)}</code></td></tr>
       <tr><th>Commit</th><td><code>{esc(settings.build.commit6)}</code></td></tr>
-      <tr><th>Server header</th><td><code>{esc(settings.build.server_header_value)}</code></td></tr>
       <tr><th>Decode methods</th><td><code>{esc(decode_methods)}</code></td></tr>
       <tr><th>Barcode formats</th><td>{esc(barcode_formats)}</td></tr>
       <tr><th>Input media types</th><td>{esc(media_types)}</td></tr>

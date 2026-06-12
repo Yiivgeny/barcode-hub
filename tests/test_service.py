@@ -114,7 +114,8 @@ def test_root_index_shows_server_info_and_resource_links():
     assert response.headers["content-type"].startswith("text/html")
     assert response.headers["server"] == "Barcode-Hub 1.2.3 (local fedcba)"
     assert "Barcode Hub" in response.text
-    assert "Barcode-Hub 1.2.3 (local fedcba)" in response.text
+    assert "Server header" not in response.text
+    assert "Barcode-Hub 1.2.3 (local fedcba)" not in response.text
     assert "GET, PUT" in response.text
     assert "EAN13, QRCode" in response.text
     assert "image/png" in response.text
