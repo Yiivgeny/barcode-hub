@@ -1,107 +1,79 @@
 name: Deploy latest package
 
 on:
-  registry_package:
-    types: [published]
+  workflow_run:
+    workflows: ["Docker image"]
+    types: [completed]
+    branches: ["main"]
 
 permissions:
   contents: read
   packages: read
 
 env:
-  IMAGE: ghcr.io/yiivgeny/barcode-hub:latest
+  IMAGE_REPOSITORY: ghcr.io/yiivgeny/barcode-hub
 
 jobs:
   notify:
     if: >
-      github.event.registry_package.name == 'barcode-hub' &&
-      github.event.registry_package.package_version.container_metadata.tag.name == 'latest'
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Wait for latest image manifest
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for latest image revision
+        env:
+          EXPECTED_REVISION: ${{ github.event.workflow_run.head_sha }}
         run: |
+          expected_image="${IMAGE_REPOSITORY}:sha-${EXPECTED_REVISION:0:7}"
+          latest_image="${IMAGE_REPOSITORY}:latest"
+
           for attempt in {1..24}; do
-            if docker buildx imagetools inspect "$IMAGE" >/dev/null 2>&1; then
+            expected_digest="$(docker buildx imagetools inspect "$expected_image" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+            latest_digest="$(docker buildx imagetools inspect "$latest_image" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+
+            if [ -n "$expected_digest" ] && [ "$expected_digest" = "$latest_digest" ]; then
+              echo "$latest_image points to $expected_image digest $latest_digest"
               exit 0
             fi
-            echo "Image is not pullable yet, retry ${attempt}/24"
+
+            if [ -z "$expected_digest" ]; then
+              echo "$expected_image is not pullable yet, retry ${attempt}/24"
+            elif [ -z "$latest_digest" ]; then
+              echo "$latest_image is not pullable yet, retry ${attempt}/24"
+            else
+              echo "$latest_image digest $latest_digest does not match $expected_image digest $expected_digest, retry ${attempt}/24"
+            fi
             sleep 5
           done
 
-          echo "Image manifest did not become pullable: $IMAGE" >&2
+          echo "$latest_image did not point to $expected_image" >&2
+          docker buildx imagetools inspect "$expected_image" || true
+          docker buildx imagetools inspect "$latest_image" || true
           exit 1
 
-      - name: Send deployment webhook
+      - name: Deploy to Coolify
         env:
           DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
           DEPLOY_WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
-          DELIVERY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-          EVENT_PATH: ${{ github.event_path }}
         run: |
-          python - <<'PY'
-          import hashlib
-          import hmac
-          import json
-          import os
-          import sys
-          import urllib.request
+          if [ -z "$DEPLOY_WEBHOOK_URL" ]; then
+            echo "DEPLOY_WEBHOOK_URL secret is not configured" >&2
+            exit 1
+          fi
+          if [ -z "$DEPLOY_WEBHOOK_SECRET" ]; then
+            echo "DEPLOY_WEBHOOK_SECRET secret is not configured" >&2
+            exit 1
+          fi
 
-          url = os.environ["DEPLOY_WEBHOOK_URL"]
-          secret_value = os.environ["DEPLOY_WEBHOOK_SECRET"]
-          delivery_id = os.environ["DELIVERY_ID"]
-
-          if not url:
-              print("DEPLOY_WEBHOOK_URL secret is not configured", file=sys.stderr)
-              sys.exit(1)
-          if not secret_value:
-              print("DEPLOY_WEBHOOK_SECRET secret is not configured", file=sys.stderr)
-              sys.exit(1)
-
-          secret = secret_value.encode("utf-8")
-
-          with open(os.environ["EVENT_PATH"], "r", encoding="utf-8") as event_file:
-              event = json.load(event_file)
-
-          payload = {
-              "event": "registry_package",
-              "action": event.get("action"),
-              "repository": event.get("repository", {}).get("full_name"),
-              "package": event.get("registry_package", {}).get("name"),
-              "image": os.environ["IMAGE"],
-              "tag": event.get("registry_package", {})
-              .get("package_version", {})
-              .get("container_metadata", {})
-              .get("tag", {})
-              .get("name"),
-              "package_version": event.get("registry_package", {}).get("package_version", {}),
-              "workflow_run": {
-                  "id": os.environ.get("GITHUB_RUN_ID"),
-                  "attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
-                  "repository": os.environ.get("GITHUB_REPOSITORY"),
-                  "sha": os.environ.get("GITHUB_SHA"),
-              },
-          }
-          body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-          signature = "sha256=" + hmac.new(secret, body, hashlib.sha256).hexdigest()
-
-          request = urllib.request.Request(
-              url,
-              data=body,
-              method="POST",
-              headers={
-                  "Content-Type": "application/json",
-                  "User-Agent": "barcode-hub-deploy-webhook",
-                  "X-GitHub-Event": "registry_package",
-                  "X-GitHub-Delivery": delivery_id,
-                  "X-Hub-Signature-256": signature,
-              },
-          )
-
-          try:
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  print(f"Webhook response: HTTP {response.status}")
-          except Exception as exc:
-              print(f"Webhook request failed: {exc}", file=sys.stderr)
-              sys.exit(1)
-          PY
+          curl --fail-with-body --show-error --silent --location \
+            --request GET "$DEPLOY_WEBHOOK_URL" \
+            --header "Authorization: Bearer $DEPLOY_WEBHOOK_SECRET"

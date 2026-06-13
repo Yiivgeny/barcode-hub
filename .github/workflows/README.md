@@ -2,10 +2,11 @@
 
 ## Deployment Webhook
 
-`.github/workflows/deploy-latest.yaml` runs after GitHub Container Registry
-publishes `ghcr.io/yiivgeny/barcode-hub:latest`. The workflow waits until the
-`latest` manifest is pullable and then sends a signed `POST` request to the
-deployment webhook.
+`.github/workflows/deploy-latest.yaml` runs after the `Docker image` workflow
+successfully completes for a `push` to `main`. The workflow waits until
+`ghcr.io/yiivgeny/barcode-hub:latest` and
+`ghcr.io/yiivgeny/barcode-hub:sha-<short-commit>` are both pullable and resolve
+to the same manifest digest, then triggers the Coolify deploy webhook.
 
 Configure these repository secrets in GitHub:
 
@@ -13,19 +14,12 @@ Configure these repository secrets in GitHub:
 Settings -> Secrets and variables -> Actions -> New repository secret
 ```
 
-- `DEPLOY_WEBHOOK_URL`: deployment endpoint to call after `latest` is available.
-- `DEPLOY_WEBHOOK_SECRET`: shared GitHub webhook secret. The workflow signs the
-  JSON request body with HMAC-SHA256 and sends it as
-  `X-Hub-Signature-256: sha256=<hex>`.
+- `DEPLOY_WEBHOOK_URL`: Coolify deploy webhook URL from the application's Webhook page.
+- `DEPLOY_WEBHOOK_SECRET`: Coolify API token with the `deploy` permission.
 
-The webhook request also includes:
+The workflow calls Coolify as documented by Coolify's GitHub Actions guide:
 
-- `X-GitHub-Event: registry_package`
-- `X-GitHub-Delivery: <run_id>-<run_attempt>`
-- `Content-Type: application/json`
-
-The receiving side should validate `X-Hub-Signature-256` against the exact
-request body using `DEPLOY_WEBHOOK_SECRET`.
-
-Make sure the GHCR package is connected to this repository so the
-`registry_package` event is delivered to this workflow.
+```bash
+curl --request GET "$DEPLOY_WEBHOOK_URL" \
+  --header "Authorization: Bearer $DEPLOY_WEBHOOK_SECRET"
+```
