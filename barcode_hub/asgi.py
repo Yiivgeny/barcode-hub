@@ -414,6 +414,11 @@ def _apply_openapi_barcode_formats(schema: dict[str, Any], settings: Settings) -
     barcode_type = schema.get("components", {}).get("schemas", {}).get("BarcodeType")
     if isinstance(barcode_type, dict):
         barcode_type["enum"] = list(settings.decode.allowed_formats)
+    types_parameter = schema.get("components", {}).get("parameters", {}).get("Types")
+    if isinstance(types_parameter, dict):
+        types_schema = types_parameter.get("schema")
+        if isinstance(types_schema, dict):
+            types_schema["default"] = list(settings.decode.default_formats)
 
 
 def _apply_openapi_media_types(schema: dict[str, Any], settings: Settings) -> None:

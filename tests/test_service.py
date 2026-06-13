@@ -166,6 +166,7 @@ def test_openapi_json_reflects_runtime_decode_settings():
         schema["components"]["parameters"]["Types"]["schema"]["items"]["$ref"]
         == "#/components/schemas/BarcodeType"
     )
+    assert schema["components"]["parameters"]["Types"]["schema"]["default"] == ["EAN13"]
     assert (
         schema["components"]["schemas"]["Barcode"]["properties"]["type"]["$ref"]
         == "#/components/schemas/BarcodeType"
