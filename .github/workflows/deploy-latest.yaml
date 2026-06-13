@@ -1,0 +1,107 @@
+name: Deploy latest package
+
+on:
+  registry_package:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  IMAGE: ghcr.io/yiivgeny/barcode-hub:latest
+
+jobs:
+  notify:
+    if: >
+      github.event.registry_package.name == 'barcode-hub' &&
+      github.event.registry_package.package_version.container_metadata.tag.name == 'latest'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Wait for latest image manifest
+        run: |
+          for attempt in {1..24}; do
+            if docker buildx imagetools inspect "$IMAGE" >/dev/null 2>&1; then
+              exit 0
+            fi
+            echo "Image is not pullable yet, retry ${attempt}/24"
+            sleep 5
+          done
+
+          echo "Image manifest did not become pullable: $IMAGE" >&2
+          exit 1
+
+      - name: Send deployment webhook
+        env:
+          DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          DEPLOY_WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+          DELIVERY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          EVENT_PATH: ${{ github.event_path }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import hmac
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          url = os.environ["DEPLOY_WEBHOOK_URL"]
+          secret_value = os.environ["DEPLOY_WEBHOOK_SECRET"]
+          delivery_id = os.environ["DELIVERY_ID"]
+
+          if not url:
+              print("DEPLOY_WEBHOOK_URL secret is not configured", file=sys.stderr)
+              sys.exit(1)
+          if not secret_value:
+              print("DEPLOY_WEBHOOK_SECRET secret is not configured", file=sys.stderr)
+              sys.exit(1)
+
+          secret = secret_value.encode("utf-8")
+
+          with open(os.environ["EVENT_PATH"], "r", encoding="utf-8") as event_file:
+              event = json.load(event_file)
+
+          payload = {
+              "event": "registry_package",
+              "action": event.get("action"),
+              "repository": event.get("repository", {}).get("full_name"),
+              "package": event.get("registry_package", {}).get("name"),
+              "image": os.environ["IMAGE"],
+              "tag": event.get("registry_package", {})
+              .get("package_version", {})
+              .get("container_metadata", {})
+              .get("tag", {})
+              .get("name"),
+              "package_version": event.get("registry_package", {}).get("package_version", {}),
+              "workflow_run": {
+                  "id": os.environ.get("GITHUB_RUN_ID"),
+                  "attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+                  "repository": os.environ.get("GITHUB_REPOSITORY"),
+                  "sha": os.environ.get("GITHUB_SHA"),
+              },
+          }
+          body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+          signature = "sha256=" + hmac.new(secret, body, hashlib.sha256).hexdigest()
+
+          request = urllib.request.Request(
+              url,
+              data=body,
+              method="POST",
+              headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "barcode-hub-deploy-webhook",
+                  "X-GitHub-Event": "registry_package",
+                  "X-GitHub-Delivery": delivery_id,
+                  "X-Hub-Signature-256": signature,
+              },
+          )
+
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  print(f"Webhook response: HTTP {response.status}")
+          except Exception as exc:
+              print(f"Webhook request failed: {exc}", file=sys.stderr)
+              sys.exit(1)
+          PY
