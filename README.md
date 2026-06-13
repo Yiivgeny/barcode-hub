@@ -64,12 +64,21 @@ curl -X PUT --data-binary @image.jpg -H 'Content-Type: image/jpeg' \
 
 ## Docker
 
+Use the prebuilt image from GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/yiivgeny/barcode-hub:latest
+docker run --rm -p 8080:8080 ghcr.io/yiivgeny/barcode-hub:latest
+```
+
+Or build locally:
+
 ```bash
 docker build -t barcode-hub:local .
 docker run --rm -p 8080:8080 barcode-hub:local
 ```
 
-Or:
+Docker Compose builds the local image by default:
 
 ```bash
 docker compose up --build
