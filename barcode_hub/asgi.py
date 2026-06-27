@@ -266,9 +266,14 @@ def _install_api_routes(
     fetcher: ResourceFetcher,
 ) -> None:
     @app.get("/decode", response_model=DecodeResult)
-    async def decode_get(url: str = Query(...), types: str | None = Query(None)) -> DecodeResult:
+    async def decode_get(
+        url: str = Query(...),
+        types: str | None = Query(None),
+        return_errors: bool | None = Query(None),
+    ) -> DecodeResult:
         ensure_decode_method_enabled("GET", settings.decode.enabled_methods)
         requested_types = _parse_requested_types(settings, types)
+        effective_return_errors = _effective_return_errors(settings, return_errors)
 
         async def work() -> DecodeResult:
             resource = await fetcher.fetch(url, "get_url")
@@ -278,14 +283,20 @@ def _install_api_routes(
                 interaction="get_url",
                 source=resource.source,
                 limit_status=422,
+                return_errors=effective_return_errors,
             )
 
         return await _run_decode_interaction(settings, metrics, "get_url", work)
 
     @app.post("/decode", response_model=DecodeResult)
-    async def decode_post(request: Request, types: str | None = Query(None)) -> DecodeResult:
+    async def decode_post(
+        request: Request,
+        types: str | None = Query(None),
+        return_errors: bool | None = Query(None),
+    ) -> DecodeResult:
         ensure_decode_method_enabled("POST", settings.decode.enabled_methods)
         requested_types = _parse_requested_types(settings, types)
+        effective_return_errors = _effective_return_errors(settings, return_errors)
         if not request.headers.get("content-type", "").lower().startswith("multipart/form-data"):
             raise UnsupportedMediaTypeError("POST /decode expects multipart/form-data.")
         form = await request.form()
@@ -310,14 +321,20 @@ def _install_api_routes(
                 interaction="post_multipart",
                 source="upload",
                 limit_status=413,
+                return_errors=effective_return_errors,
             )
 
         return await _run_decode_interaction(settings, metrics, "post_multipart", work)
 
     @app.put("/decode", response_model=DecodeResult)
-    async def decode_put(request: Request, types: str | None = Query(None)) -> DecodeResult:
+    async def decode_put(
+        request: Request,
+        types: str | None = Query(None),
+        return_errors: bool | None = Query(None),
+    ) -> DecodeResult:
         ensure_decode_method_enabled("PUT", settings.decode.enabled_methods)
         requested_types = _parse_requested_types(settings, types)
+        effective_return_errors = _effective_return_errors(settings, return_errors)
         if not is_allowed_image_content_type(
             request.headers.get("content-type"), settings.media.allowed_content_types
         ):
@@ -328,7 +345,12 @@ def _install_api_routes(
 
         async def work() -> DecodeResult:
             return await decode_service.decode_bytes(
-                data, requested_types, interaction="put_binary", source="raw_body", limit_status=413
+                data,
+                requested_types,
+                interaction="put_binary",
+                source="raw_body",
+                limit_status=413,
+                return_errors=effective_return_errors,
             )
 
         return await _run_decode_interaction(settings, metrics, "put_binary", work)
@@ -364,6 +386,10 @@ def _parse_requested_types(settings: Settings, types: str | None) -> list[str]:
     return settings.ensure_requested_types_allowed(requested)
 
 
+def _effective_return_errors(settings: Settings, return_errors: bool | None) -> bool:
+    return settings.decode.return_errors if return_errors is None else return_errors
+
+
 def _install_openapi(app: FastAPI, settings: Settings) -> None:
     openapi_path = next(
         path
@@ -386,6 +412,7 @@ def _runtime_openapi_schema(base_schema: dict[str, Any], settings: Settings) -> 
     _apply_openapi_info(schema, settings)
     _apply_openapi_decode_methods(schema, settings)
     _apply_openapi_barcode_formats(schema, settings)
+    _apply_openapi_decode_options(schema, settings)
     _apply_openapi_media_types(schema, settings)
     return schema
 
@@ -419,6 +446,16 @@ def _apply_openapi_barcode_formats(schema: dict[str, Any], settings: Settings) -
         types_schema = types_parameter.get("schema")
         if isinstance(types_schema, dict):
             types_schema["default"] = list(settings.decode.default_formats)
+
+
+def _apply_openapi_decode_options(schema: dict[str, Any], settings: Settings) -> None:
+    return_errors_parameter = (
+        schema.get("components", {}).get("parameters", {}).get("ReturnErrors")
+    )
+    if isinstance(return_errors_parameter, dict):
+        return_errors_schema = return_errors_parameter.get("schema")
+        if isinstance(return_errors_schema, dict):
+            return_errors_schema["default"] = settings.decode.return_errors
 
 
 def _apply_openapi_media_types(schema: dict[str, Any], settings: Settings) -> None:

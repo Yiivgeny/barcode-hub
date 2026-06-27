@@ -63,6 +63,7 @@ class DecodeService:
         interaction: str,
         source: str,
         limit_status: int = 413,
+        return_errors: bool | None = None,
     ) -> DecodeResult:
         if len(data) > self.settings.limits.max_file_bytes:
             message = "Input file exceeds configured file size limit."
@@ -83,8 +84,13 @@ class DecodeService:
 
         start = time.perf_counter()
         status = "success"
+        effective_return_errors = (
+            self.settings.decode.return_errors if return_errors is None else return_errors
+        )
         try:
-            results = await anyio.to_thread.run_sync(self._decode_image, image, tuple(requested_types))
+            results = await anyio.to_thread.run_sync(
+                self._decode_image, image, tuple(requested_types), effective_return_errors
+            )
         except Exception:
             status = "error"
             raise
@@ -108,7 +114,9 @@ class DecodeService:
         except (UnidentifiedImageError, OSError) as exc:
             raise UnprocessableContentError("Input is not a readable image.") from exc
 
-    def _decode_image(self, image: Image.Image, requested_types: tuple[str, ...]) -> list[BarcodeResult]:
+    def _decode_image(
+        self, image: Image.Image, requested_types: tuple[str, ...], return_errors: bool
+    ) -> list[BarcodeResult]:
         import zxingcpp
 
         formats = tuple(getattr(zxingcpp.BarcodeFormat, item) for item in requested_types)
@@ -119,7 +127,7 @@ class DecodeService:
             try_rotate=self.settings.decode.try_rotate,
             try_downscale=self.settings.decode.try_downscale,
             try_invert=self.settings.decode.try_invert,
-            return_errors=self.settings.decode.return_errors,
+            return_errors=return_errors,
         )
         return self._map_barcodes(barcodes, requested_types, offset=(0, 0))
 

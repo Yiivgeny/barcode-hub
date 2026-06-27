@@ -22,6 +22,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Url"
         - $ref: "#/components/parameters/Types"
+        - $ref: "#/components/parameters/ReturnErrors"
       responses:
         "200":
           $ref: "#/components/responses/DecodeSuccess"
@@ -48,6 +49,7 @@ paths:
         Uploads with zero files or more than one file are rejected with 400.
       parameters:
         - $ref: "#/components/parameters/Types"
+        - $ref: "#/components/parameters/ReturnErrors"
       requestBody:
         required: true
         content:
@@ -87,6 +89,7 @@ paths:
         allowed `image/*` media type.
       parameters:
         - $ref: "#/components/parameters/Types"
+        - $ref: "#/components/parameters/ReturnErrors"
       requestBody:
         required: true
         content:
@@ -153,6 +156,17 @@ components:
         mixed:
           summary: Linear and matrix codes
           value: [EAN13, UPCA, QRCode]
+    ReturnErrors:
+      name: return_errors
+      in: query
+      required: false
+      description: |
+        Override whether ZXing-C++ returns barcode candidates with decoder
+        errors. When omitted, the runtime `decode.return_errors` configuration
+        is used.
+      schema:
+        type: boolean
+        default: true
   responses:
     DecodeSuccess:
       description: Decode completed successfully. The barcode array may be empty.

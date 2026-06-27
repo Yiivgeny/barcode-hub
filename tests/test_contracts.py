@@ -194,6 +194,12 @@ class OpenApiContractTests(unittest.TestCase):
         self.assertIn("explode: false", spec)
         self.assertIn("`types=EAN13,UPCA`", spec)
 
+    def test_openapi_documents_return_errors_parameter(self):
+        spec = OPENAPI_PATH.read_text(encoding="utf-8")
+        self.assertIn("name: return_errors", spec)
+        self.assertIn("$ref: \"#/components/parameters/ReturnErrors\"", spec)
+        self.assertIn("type: boolean", spec)
+
     def test_openapi_does_not_document_server_header(self):
         spec = OPENAPI_PATH.read_text(encoding="utf-8")
         self.assertNotIn("Barcode-Hub", spec)

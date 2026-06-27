@@ -13,6 +13,9 @@ from barcode_hub.url_policy import match_url_prefix
 
 
 class FakeDecodeService:
+    def __init__(self) -> None:
+        self.return_errors: list[bool | None] = []
+
     async def decode_bytes(
         self,
         data: bytes,
@@ -20,7 +23,9 @@ class FakeDecodeService:
         interaction: str,
         source: str,
         limit_status: int = 413,
+        return_errors: bool | None = None,
     ) -> DecodeResult:
+        self.return_errors.append(return_errors)
         return DecodeResult(
             barcodes=[
                 BarcodeResult(
@@ -76,6 +81,36 @@ def test_put_decode_returns_minimal_contract_and_server_header():
         ]
     }
     assert response.headers["server"] == "Barcode-Hub 0.1.0 (dev 000000)"
+
+
+def test_decode_return_errors_query_overrides_config():
+    settings = Settings(decode=DecodeConfig(return_errors=True), mcp=McpConfig(enabled=False))
+    decode_service = FakeDecodeService()
+    client = TestClient(create_app(settings, Metrics(settings), decode_service))
+
+    response = client.put(
+        "/decode?types=EAN13&return_errors=false",
+        content=b"fake",
+        headers={"content-type": "image/png"},
+    )
+
+    assert response.status_code == 200
+    assert decode_service.return_errors == [False]
+
+
+def test_decode_return_errors_defaults_to_config():
+    settings = Settings(decode=DecodeConfig(return_errors=False), mcp=McpConfig(enabled=False))
+    decode_service = FakeDecodeService()
+    client = TestClient(create_app(settings, Metrics(settings), decode_service))
+
+    response = client.put(
+        "/decode?types=EAN13",
+        content=b"fake",
+        headers={"content-type": "image/png"},
+    )
+
+    assert response.status_code == 200
+    assert decode_service.return_errors == [False]
 
 
 def test_post_decode_rejects_multiple_uploaded_files():
@@ -157,6 +192,7 @@ def test_openapi_json_reflects_runtime_decode_settings():
             enabled_methods=["GET", "POST", "PUT"],
             default_formats=["EAN13"],
             allowed_formats=["EAN13", "QRCode"],
+            return_errors=False,
         ),
         media=MediaConfig(allowed_content_types=["image/png", "image/webp"]),
         mcp=McpConfig(enabled=False),
@@ -179,6 +215,7 @@ def test_openapi_json_reflects_runtime_decode_settings():
         == "#/components/schemas/BarcodeType"
     )
     assert schema["components"]["parameters"]["Types"]["schema"]["default"] == ["EAN13"]
+    assert schema["components"]["parameters"]["ReturnErrors"]["schema"]["default"] is False
     assert (
         schema["components"]["schemas"]["Barcode"]["properties"]["type"]["$ref"]
         == "#/components/schemas/BarcodeType"
