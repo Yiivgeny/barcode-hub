@@ -10,6 +10,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "spec" / "decode-result.schema.json"
 OPENAPI_PATH = ROOT / "spec" / "openapi.yaml"
 MCP_PATH = ROOT / "spec" / "mcp.md"
+SAMPLE_COORDS = {
+    "top_left": {"x": 12, "y": 34},
+    "top_right": {"x": 212, "y": 34},
+    "bottom_right": {"x": 212, "y": 88},
+    "bottom_left": {"x": 12, "y": 88},
+}
 
 
 class SchemaValidationError(AssertionError):
@@ -65,6 +71,9 @@ def validate(instance, schema, root=None, path="$"):
         pattern = schema.get("pattern")
         if pattern and not re.fullmatch(pattern, instance):
             raise SchemaValidationError(f"{path}: string does not match pattern")
+    elif expected_type == "integer":
+        if not isinstance(instance, int):
+            raise SchemaValidationError(f"{path}: expected integer")
 
 
 def assert_valid_decode_result(testcase: unittest.TestCase, instance: dict) -> None:
@@ -102,6 +111,7 @@ class DecodeResultSchemaTests(unittest.TestCase):
                         "data": "NDYwNzA4NDM1MTMyMw==",
                         "type": "EAN13",
                         "valid": "yes",
+                        "coords": SAMPLE_COORDS,
                     }
                 ]
             },
@@ -118,6 +128,7 @@ class DecodeResultSchemaTests(unittest.TestCase):
                             "data": "NDYwNzA4NDM1MTMyMw==",
                             "type": "EAN13",
                             "valid": "maybe",
+                            "coords": SAMPLE_COORDS,
                         }
                     ]
                 },
@@ -133,6 +144,23 @@ class DecodeResultSchemaTests(unittest.TestCase):
                             "text": "4607084351323",
                             "data": "NDYwNzA4NDM1MTMyMw==",
                             "type": "EAN_13",
+                            "valid": "yes",
+                            "coords": SAMPLE_COORDS,
+                        }
+                    ]
+                },
+            )
+
+    def test_missing_coords_is_rejected(self):
+        with self.assertRaises(Exception):
+            assert_valid_decode_result(
+                self,
+                {
+                    "barcodes": [
+                        {
+                            "text": "4607084351323",
+                            "data": "NDYwNzA4NDM1MTMyMw==",
+                            "type": "EAN13",
                             "valid": "yes",
                         }
                     ]

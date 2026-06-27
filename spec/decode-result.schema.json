@@ -20,13 +20,60 @@
         },
         "valid": {
           "$ref": "#/$defs/BarcodeValidity"
+        },
+        "coords": {
+          "$ref": "#/$defs/BarcodeCoords",
+          "description": "Detected barcode quadrilateral corners in input image pixel coordinates."
         }
       },
       "required": [
         "text",
         "data",
         "type",
-        "valid"
+        "valid",
+        "coords"
+      ],
+      "type": "object"
+    },
+    "BarcodeCoords": {
+      "additionalProperties": false,
+      "properties": {
+        "top_left": {
+          "$ref": "#/$defs/BarcodePoint"
+        },
+        "top_right": {
+          "$ref": "#/$defs/BarcodePoint"
+        },
+        "bottom_right": {
+          "$ref": "#/$defs/BarcodePoint"
+        },
+        "bottom_left": {
+          "$ref": "#/$defs/BarcodePoint"
+        }
+      },
+      "required": [
+        "top_left",
+        "top_right",
+        "bottom_right",
+        "bottom_left"
+      ],
+      "type": "object"
+    },
+    "BarcodePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "description": "Horizontal pixel coordinate from the left edge of the input image.",
+          "type": "integer"
+        },
+        "y": {
+          "description": "Vertical pixel coordinate from the top edge of the input image.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y"
       ],
       "type": "object"
     },

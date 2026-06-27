@@ -12,7 +12,7 @@ from barcode_hub.config import Settings
 from barcode_hub.errors import UnprocessableContentError
 from barcode_hub.formats import canonicalize_barcode_type
 from barcode_hub.metrics import Metrics
-from barcode_hub.models import BarcodeResult, DecodeResult
+from barcode_hub.models import BarcodeCoords, BarcodePoint, BarcodeResult, DecodeResult
 
 
 def _validity(value: object) -> str:
@@ -32,6 +32,23 @@ def _raw_bytes(barcode: object) -> bytes:
     if isinstance(raw, str):
         return raw.encode("utf-8")
     return str(getattr(barcode, "text", "")).encode("utf-8")
+
+
+def _point(point: object, offset: tuple[int, int]) -> BarcodePoint:
+    return BarcodePoint(
+        x=int(getattr(point, "x")) + offset[0],
+        y=int(getattr(point, "y")) + offset[1],
+    )
+
+
+def _coords(barcode: object, offset: tuple[int, int]) -> BarcodeCoords:
+    position = getattr(barcode, "position")
+    return BarcodeCoords(
+        top_left=_point(getattr(position, "top_left"), offset),
+        top_right=_point(getattr(position, "top_right"), offset),
+        bottom_right=_point(getattr(position, "bottom_right"), offset),
+        bottom_left=_point(getattr(position, "bottom_left"), offset),
+    )
 
 
 class DecodeService:
@@ -104,10 +121,13 @@ class DecodeService:
             try_invert=self.settings.decode.try_invert,
             return_errors=self.settings.decode.return_errors,
         )
-        return self._map_barcodes(barcodes, requested_types)
+        return self._map_barcodes(barcodes, requested_types, offset=(0, 0))
 
     def _map_barcodes(
-        self, barcodes: Iterable[object], requested_types: tuple[str, ...]
+        self,
+        barcodes: Iterable[object],
+        requested_types: tuple[str, ...],
+        offset: tuple[int, int],
     ) -> list[BarcodeResult]:
         requested = set(requested_types)
         results: list[BarcodeResult] = []
@@ -122,6 +142,7 @@ class DecodeService:
                     data=base64.b64encode(raw).decode("ascii"),
                     type=barcode_type,
                     valid=_validity(getattr(barcode, "valid", None)),
+                    coords=_coords(barcode, offset),
                 )
             )
         return results

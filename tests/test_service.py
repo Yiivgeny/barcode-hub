@@ -28,6 +28,12 @@ class FakeDecodeService:
                     data=base64.b64encode(b"4607084351323").decode("ascii"),
                     type=requested_types[0],
                     valid="yes",
+                    coords={
+                        "top_left": {"x": 12, "y": 34},
+                        "top_right": {"x": 212, "y": 34},
+                        "bottom_right": {"x": 212, "y": 88},
+                        "bottom_left": {"x": 12, "y": 88},
+                    },
                 )
             ]
         )
@@ -60,6 +66,12 @@ def test_put_decode_returns_minimal_contract_and_server_header():
                 "data": "NDYwNzA4NDM1MTMyMw==",
                 "type": "EAN13",
                 "valid": "yes",
+                "coords": {
+                    "top_left": {"x": 12, "y": 34},
+                    "top_right": {"x": 212, "y": 34},
+                    "bottom_right": {"x": 212, "y": 88},
+                    "bottom_left": {"x": 12, "y": 88},
+                },
             }
         ]
     }

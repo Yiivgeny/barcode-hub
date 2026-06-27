@@ -169,6 +169,19 @@ components:
                     data: "NDYwNzA4NDM1MTMyMw=="
                     type: EAN13
                     valid: "yes"
+                    coords:
+                      top_left:
+                        x: 12
+                        y: 34
+                      top_right:
+                        x: 212
+                        y: 34
+                      bottom_right:
+                        x: 212
+                        y: 88
+                      bottom_left:
+                        x: 12
+                        y: 88
             empty:
               summary: No barcodes found
               value:
@@ -278,11 +291,45 @@ components:
           $ref: '#/components/schemas/BarcodeType'
         valid:
           $ref: '#/components/schemas/BarcodeValidity'
+        coords:
+          $ref: '#/components/schemas/BarcodeCoords'
+          description: Detected barcode quadrilateral corners in input image pixel coordinates.
       required:
       - text
       - data
       - type
       - valid
+      - coords
+      type: object
+    BarcodeCoords:
+      additionalProperties: false
+      properties:
+        top_left:
+          $ref: '#/components/schemas/BarcodePoint'
+        top_right:
+          $ref: '#/components/schemas/BarcodePoint'
+        bottom_right:
+          $ref: '#/components/schemas/BarcodePoint'
+        bottom_left:
+          $ref: '#/components/schemas/BarcodePoint'
+      required:
+      - top_left
+      - top_right
+      - bottom_right
+      - bottom_left
+      type: object
+    BarcodePoint:
+      additionalProperties: false
+      properties:
+        x:
+          description: Horizontal pixel coordinate from the left edge of the input image.
+          type: integer
+        y:
+          description: Vertical pixel coordinate from the top edge of the input image.
+          type: integer
+      required:
+      - x
+      - y
       type: object
     BarcodeType:
       enum:

@@ -12,7 +12,13 @@ The API response body is intentionally minimal:
       "text": "4607084351323",
       "data": "NDYwNzA4NDM1MTMyMw==",
       "type": "EAN13",
-      "valid": "yes"
+      "valid": "yes",
+      "coords": {
+        "top_left": {"x": 12, "y": 34},
+        "top_right": {"x": 212, "y": 34},
+        "bottom_right": {"x": 212, "y": 88},
+        "bottom_left": {"x": 12, "y": 88}
+      }
     }
   ]
 }

@@ -13,6 +13,22 @@ class BarcodeValidity(str, Enum):
     unknown = "unknown"
 
 
+class BarcodePoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x: int = Field(description="Horizontal pixel coordinate from the left edge of the input image.")
+    y: int = Field(description="Vertical pixel coordinate from the top edge of the input image.")
+
+
+class BarcodeCoords(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    top_left: BarcodePoint
+    top_right: BarcodePoint
+    bottom_right: BarcodePoint
+    bottom_left: BarcodePoint
+
+
 class Barcode(BaseModel):
     model_config = ConfigDict(extra="forbid", use_enum_values=True)
 
@@ -24,6 +40,9 @@ class Barcode(BaseModel):
     )
     type: BarcodeType
     valid: BarcodeValidity
+    coords: BarcodeCoords = Field(
+        description="Detected barcode quadrilateral corners in input image pixel coordinates."
+    )
 
 
 class DecodeResult(BaseModel):
