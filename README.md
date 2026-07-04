@@ -32,13 +32,22 @@ response, but it is not part of the OpenAPI or MCP contracts.
 Single service port, default `8080`:
 
 - `GET /` shows a small HTML server index with build info and resource links
-- `GET /decode?url=...&types=EAN13,UPCA`
+- `GET /decode?url=...&types=EAN13,UPCA&return_errors=true`
 - `POST /decode` with exactly one `multipart/form-data` image file
-- `PUT /decode` with raw image bytes and an `image/*` Content-Type
+- `PUT /decode` with raw image bytes and an allowed `image/*` Content-Type
 - `GET /health` checks that `zxingcpp` is importable and exposes the required API
 - `GET /metrics` exposes Prometheus metrics
 - `/mcp` when MCP is enabled
 - `/docs`, `/redoc`, `/openapi.json`
+
+`types` is optional. When omitted, `decode.default_formats` is used. Values are
+canonical Barcode Hub type IDs, with common aliases such as `EAN-13`, `UPC-A`,
+and `QR Code` accepted on input. Requested types must be inside
+`decode.allowed_formats`.
+
+`return_errors` is optional on all `/decode` methods. When omitted,
+`decode.return_errors` controls whether ZXing-C++ returns barcode candidates
+with decoder errors.
 
 ## Run Locally
 
@@ -93,13 +102,14 @@ docker compose up --build
 ## Configuration
 
 Configuration is loaded from `/etc/barcode-hub/config.yaml` when it exists.
-Environment variables override file values. Nested variables use `__` and the
-`BARCODE_HUB_` prefix.
+Set `BARCODE_HUB_CONFIG` to use another YAML path. Environment variables
+override file values. Nested variables use `__` and the `BARCODE_HUB_` prefix.
 
 Example YAML:
 
 ```yaml
 app:
+  host: 0.0.0.0
   port: 8080
 limits:
   max_request_body_bytes: 16777216
@@ -110,11 +120,16 @@ decode:
   default_formats: ["EAN13", "EAN8", "UPCA", "UPCE"]
   allowed_formats: ["EAN13", "EAN8", "UPCA", "UPCE", "QRCode", "DataMatrix"]
   request_timeout_seconds: 10
+  try_rotate: true
+  try_downscale: true
+  try_invert: false
+  return_errors: true
 fetch:
   timeout_seconds: 5
   allowed_url_prefixes: ["https://*.example.com/", "data:*"]
 media:
-  allowed_content_types: ["image/png", "image/jpeg", "image/webp"]
+  allowed_content_types:
+    ["image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp", "image/tiff"]
 mcp:
   enabled: true
 logging:
@@ -124,21 +139,33 @@ logging:
 
 Common environment variables:
 
+- `BARCODE_HUB_CONFIG`
+- `BARCODE_HUB_APP__HOST`
+- `BARCODE_HUB_APP__PORT`
 - `BARCODE_HUB_LIMITS__MAX_REQUEST_BODY_BYTES`
 - `BARCODE_HUB_LIMITS__MAX_FILE_BYTES`
 - `BARCODE_HUB_LIMITS__MAX_IMAGE_SIDE_PIXELS`
 - `BARCODE_HUB_DECODE__ENABLED_METHODS`
+- `BARCODE_HUB_DECODE__DEFAULT_FORMATS`
+- `BARCODE_HUB_DECODE__ALLOWED_FORMATS`
 - `BARCODE_HUB_DECODE__REQUEST_TIMEOUT_SECONDS`
+- `BARCODE_HUB_DECODE__TRY_ROTATE`
+- `BARCODE_HUB_DECODE__TRY_DOWNSCALE`
+- `BARCODE_HUB_DECODE__TRY_INVERT`
 - `BARCODE_HUB_DECODE__RETURN_ERRORS`
 - `BARCODE_HUB_FETCH__TIMEOUT_SECONDS`
 - `BARCODE_HUB_FETCH__ALLOWED_URL_PREFIXES`
 - `BARCODE_HUB_MEDIA__ALLOWED_CONTENT_TYPES`
 - `BARCODE_HUB_MCP__ENABLED`
 - `BARCODE_HUB_LOGGING__FORMAT`
+- `BARCODE_HUB_LOGGING__LEVEL`
 
 `allowed_url_prefixes` are matched by parsing URLs. For example,
 `https://*.example.com/` matches `https://cdn.example.com/image.jpg`, but does
 not match `https://test.tld/example.com/image.jpg`.
+
+List settings should be supplied as YAML arrays in config files and JSON arrays
+in environment variables, for example `["GET","POST","PUT"]`.
 
 ## Metrics
 
@@ -183,7 +210,8 @@ Runtime `/openapi.json` is loaded from `spec/openapi.yaml` and then narrowed by
 the active configuration: disabled `/decode` methods are removed, `BarcodeType`
 is limited to `decode.allowed_formats`, and request media types reflect
 `media.allowed_content_types`. The `types` query parameter default reflects
-`decode.default_formats`. Swagger UI and ReDoc use that runtime schema.
+`decode.default_formats`, and `return_errors` reflects `decode.return_errors`.
+Swagger UI and ReDoc use that runtime schema.
 
 `DecodeResult`, `Barcode`, `BarcodeType`, and `BarcodeValidity` are generated
 from the Python models and format enum:
