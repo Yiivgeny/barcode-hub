@@ -20,20 +20,6 @@ class AppConfig(BaseModel):
     port: int = 8080
 
 
-class BuildConfig(BaseModel):
-    version: str = "0.1.0"
-    build: str = "dev"
-    commit: str = "000000"
-
-    @property
-    def commit6(self) -> str:
-        return (self.commit or "000000")[:6].lower().ljust(6, "0")
-
-    @property
-    def server_header_value(self) -> str:
-        return f"Barcode-Hub {self.version} ({self.build} {self.commit6})"
-
-
 class LimitsConfig(BaseModel):
     max_request_body_bytes: int = 16 * 1024 * 1024
     max_file_bytes: int = 8 * 1024 * 1024
@@ -136,7 +122,6 @@ class YamlConfigSettingsSource(PydanticBaseSettingsSource):
 
 class Settings(BaseSettings):
     app: AppConfig = Field(default_factory=AppConfig)
-    build: BuildConfig = Field(default_factory=BuildConfig)
     limits: LimitsConfig = Field(default_factory=LimitsConfig)
     decode: DecodeConfig = Field(default_factory=DecodeConfig)
     fetch: FetchConfig = Field(default_factory=FetchConfig)

@@ -13,6 +13,7 @@ from prometheus_client import (
 from prometheus_client.exposition import CONTENT_TYPE_LATEST
 from prometheus_client.gc_collector import GCCollector
 
+from barcode_hub.build_info import BuildInfo, load_build_info
 from barcode_hub.config import Settings
 
 
@@ -34,7 +35,8 @@ IMAGE_SIDE_BUCKETS = (128, 256, 512, 1024, 1600, 2048, 4096, 8192, 16384)
 
 
 class Metrics:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, build_info: BuildInfo | None = None) -> None:
+        build_info = build_info or load_build_info()
         self.registry = CollectorRegistry(auto_describe=True)
         ProcessCollector(namespace="barcode_hub", registry=self.registry)
         PlatformCollector(registry=self.registry)
@@ -43,9 +45,9 @@ class Metrics:
         self.build_info = Info("barcode_hub_build", "Barcode Hub build info", registry=self.registry)
         self.build_info.info(
             {
-                "version": settings.build.version,
-                "build": settings.build.build,
-                "commit": settings.build.commit6,
+                "version": build_info.version,
+                "build": build_info.build,
+                "commit": build_info.commit6,
             }
         )
 
@@ -118,4 +120,3 @@ class Metrics:
 
 
 __all__ = ["CONTENT_TYPE_LATEST", "Metrics"]
-

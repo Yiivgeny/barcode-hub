@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import base64
+import json
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from barcode_hub.asgi import create_app
-from barcode_hub.config import BuildConfig, DecodeConfig, McpConfig, MediaConfig, Settings
+from barcode_hub.build_info import BuildInfo, load_build_info
+from barcode_hub.config import DecodeConfig, McpConfig, MediaConfig, Settings
 from barcode_hub.metrics import Metrics
 from barcode_hub.models import BarcodeResult, DecodeResult
 from barcode_hub.url_policy import match_url_prefix
@@ -142,9 +144,32 @@ def test_disabled_method_returns_405():
     assert response.json()["error"]["code"] == "method_disabled"
 
 
+def test_build_info_loads_from_json_file(tmp_path):
+    path = tmp_path / "build_info.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": "2.3.4",
+                "build": "main",
+                "commit": "abcdef123456",
+                "created": "2026-07-04T20:30:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    build_info = load_build_info(path)
+
+    assert build_info.version == "2.3.4"
+    assert build_info.build == "main"
+    assert build_info.commit == "abcdef123456"
+    assert build_info.commit6 == "abcdef"
+    assert build_info.server_header_value == "Barcode-Hub 2.3.4 (main abcdef)"
+
+
 def test_root_index_shows_server_info_and_resource_links():
+    build_info = BuildInfo(version="1.2.3", build="local", commit="fedcba987")
     settings = Settings(
-        build=BuildConfig(version="1.2.3", build="local", commit="fedcba987"),
         decode=DecodeConfig(
             enabled_methods=["GET", "PUT"],
             default_formats=["EAN13"],
@@ -153,7 +178,14 @@ def test_root_index_shows_server_info_and_resource_links():
         media=MediaConfig(allowed_content_types=["image/png"]),
         mcp=McpConfig(enabled=False),
     )
-    client = TestClient(create_app(settings, Metrics(settings), FakeDecodeService()))
+    client = TestClient(
+        create_app(
+            settings,
+            Metrics(settings, build_info),
+            FakeDecodeService(),
+            build_info=build_info,
+        )
+    )
 
     response = client.get("/")
 
@@ -186,8 +218,8 @@ def test_root_index_links_mcp_when_enabled():
 
 
 def test_openapi_json_reflects_runtime_decode_settings():
+    build_info = BuildInfo(version="9.8.7", build="test", commit="abcdef123")
     settings = Settings(
-        build=BuildConfig(version="9.8.7", build="test", commit="abcdef123"),
         decode=DecodeConfig(
             enabled_methods=["GET", "POST", "PUT"],
             default_formats=["EAN13"],
@@ -197,7 +229,14 @@ def test_openapi_json_reflects_runtime_decode_settings():
         media=MediaConfig(allowed_content_types=["image/png", "image/webp"]),
         mcp=McpConfig(enabled=False),
     )
-    client = TestClient(create_app(settings, Metrics(settings), FakeDecodeService()))
+    client = TestClient(
+        create_app(
+            settings,
+            Metrics(settings, build_info),
+            FakeDecodeService(),
+            build_info=build_info,
+        )
+    )
 
     response = client.get("/openapi.json")
 

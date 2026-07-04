@@ -49,7 +49,7 @@ testpaths = ["tests"]
 include = ["barcode_hub*"]
 
 [tool.setuptools.package-data]
-barcode_hub = []
+barcode_hub = ["build_info.json"]
 
 [tool.ruff]
 line-length = 100

@@ -14,10 +14,7 @@ LABEL org.opencontainers.image.title="Barcode Hub" \
       org.opencontainers.image.source="https://github.com/openai/barcode-hub"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    BARCODE_HUB_BUILD__VERSION="${VERSION}" \
-    BARCODE_HUB_BUILD__BUILD="${BUILD}" \
-    BARCODE_HUB_BUILD__COMMIT="${VCS_REF}"
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
@@ -26,6 +23,26 @@ RUN useradd --create-home --uid 10001 barcode
 COPY pyproject.toml README.md LICENSE ./
 COPY barcode_hub ./barcode_hub
 COPY spec ./spec
+
+RUN VERSION="$VERSION" BUILD="$BUILD" VCS_REF="$VCS_REF" CREATED="$CREATED" python - <<'PY'
+import json
+import os
+from pathlib import Path
+
+Path("barcode_hub/build_info.json").write_text(
+    json.dumps(
+        {
+            "version": os.environ["VERSION"],
+            "build": os.environ["BUILD"],
+            "commit": os.environ["VCS_REF"],
+            "created": os.environ["CREATED"],
+        },
+        indent=2,
+    )
+    + "\n",
+    encoding="utf-8",
+)
+PY
 
 RUN pip install --no-cache-dir . \
     && chown -R barcode:barcode /app

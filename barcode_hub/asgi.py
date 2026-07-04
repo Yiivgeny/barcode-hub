@@ -15,6 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
+from barcode_hub.build_info import BuildInfo, load_build_info
 from barcode_hub.config import Settings, load_settings
 from barcode_hub.decoder import DecodeService
 from barcode_hub.errors import (
@@ -43,9 +44,11 @@ def create_app(
     metrics: Metrics | None = None,
     decode_service: DecodeService | None = None,
     fetcher: ResourceFetcher | None = None,
+    build_info: BuildInfo | None = None,
 ) -> FastAPI:
     settings = settings or load_settings()
-    metrics = metrics or Metrics(settings)
+    build_info = build_info or load_build_info()
+    metrics = metrics or Metrics(settings, build_info)
     decode_service = decode_service or DecodeService(settings, metrics)
     fetcher = fetcher or ResourceFetcher(settings, metrics)
     mcp_server = (
@@ -64,21 +67,22 @@ def create_app(
 
     app = FastAPI(
         title="Barcode Hub API",
-        version=settings.build.version,
+        version=build_info.version,
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
         lifespan=lifespan,
     )
     app.state.settings = settings
+    app.state.build_info = build_info
     app.state.metrics = metrics
     app.state.decode_service = decode_service
     app.state.fetcher = fetcher
 
-    _install_common_handlers(app, settings)
+    _install_common_handlers(app, settings, build_info)
     _install_api_routes(app, settings, metrics, decode_service, fetcher)
-    _install_service_routes(app, settings, metrics)
-    _install_openapi(app, settings)
+    _install_service_routes(app, settings, metrics, build_info)
+    _install_openapi(app, settings, build_info)
 
     if mcp_server is not None:
         app.mount("/mcp", mcp_server.streamable_http_app())
@@ -86,10 +90,12 @@ def create_app(
     return app
 
 
-def _install_service_routes(app: FastAPI, settings: Settings, metrics: Metrics) -> None:
+def _install_service_routes(
+    app: FastAPI, settings: Settings, metrics: Metrics, build_info: BuildInfo
+) -> None:
     @app.get("/", response_class=HTMLResponse)
     async def index() -> HTMLResponse:
-        return HTMLResponse(_server_index_html(settings))
+        return HTMLResponse(_server_index_html(settings, build_info))
 
     @app.get("/health")
     async def health() -> JSONResponse:
@@ -101,7 +107,7 @@ def _install_service_routes(app: FastAPI, settings: Settings, metrics: Metrics) 
         return Response(metrics.render(), media_type=CONTENT_TYPE_LATEST)
 
 
-def _server_index_html(settings: Settings) -> str:
+def _server_index_html(settings: Settings, build_info: BuildInfo) -> str:
     def esc(value: object) -> str:
         return html.escape(str(value), quote=True)
 
@@ -200,9 +206,9 @@ def _server_index_html(settings: Settings) -> str:
 
     <h2>Server</h2>
     <table>
-      <tr><th>Version</th><td><code>{esc(settings.build.version)}</code></td></tr>
-      <tr><th>Build</th><td><code>{esc(settings.build.build)}</code></td></tr>
-      <tr><th>Commit</th><td><code>{esc(settings.build.commit6)}</code></td></tr>
+      <tr><th>Version</th><td><code>{esc(build_info.version)}</code></td></tr>
+      <tr><th>Build</th><td><code>{esc(build_info.build)}</code></td></tr>
+      <tr><th>Commit</th><td><code>{esc(build_info.commit6)}</code></td></tr>
       <tr><th>Decode methods</th><td><code>{esc(decode_methods)}</code></td></tr>
       <tr><th>Barcode formats</th><td>{esc(barcode_formats)}</td></tr>
       <tr><th>Input media types</th><td>{esc(media_types)}</td></tr>
@@ -219,7 +225,7 @@ def _server_index_html(settings: Settings) -> str:
 """
 
 
-def _install_common_handlers(app: FastAPI, settings: Settings) -> None:
+def _install_common_handlers(app: FastAPI, settings: Settings, build_info: BuildInfo) -> None:
     @app.middleware("http")
     async def response_header_and_body_limit(request: Request, call_next):
         content_length = request.headers.get("content-length")
@@ -235,7 +241,7 @@ def _install_common_handlers(app: FastAPI, settings: Settings) -> None:
             )
         else:
             response = await call_next(request)
-        response.headers["Server"] = settings.build.server_header_value
+        response.headers["Server"] = build_info.server_header_value
         return response
 
     @app.exception_handler(AppError)
@@ -390,7 +396,7 @@ def _effective_return_errors(settings: Settings, return_errors: bool | None) -> 
     return settings.decode.return_errors if return_errors is None else return_errors
 
 
-def _install_openapi(app: FastAPI, settings: Settings) -> None:
+def _install_openapi(app: FastAPI, settings: Settings, build_info: BuildInfo) -> None:
     openapi_path = next(
         path
         for path in (SPEC_DIR / "openapi.yaml", Path.cwd() / "spec" / "openapi.yaml")
@@ -401,15 +407,17 @@ def _install_openapi(app: FastAPI, settings: Settings) -> None:
         if app.openapi_schema:
             return app.openapi_schema
         base_schema = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
-        app.openapi_schema = _runtime_openapi_schema(base_schema, settings)
+        app.openapi_schema = _runtime_openapi_schema(base_schema, settings, build_info)
         return app.openapi_schema
 
     app.openapi = custom_openapi  # type: ignore[method-assign]
 
 
-def _runtime_openapi_schema(base_schema: dict[str, Any], settings: Settings) -> dict[str, Any]:
+def _runtime_openapi_schema(
+    base_schema: dict[str, Any], settings: Settings, build_info: BuildInfo
+) -> dict[str, Any]:
     schema = copy.deepcopy(base_schema)
-    _apply_openapi_info(schema, settings)
+    _apply_openapi_info(schema, build_info)
     _apply_openapi_decode_methods(schema, settings)
     _apply_openapi_barcode_formats(schema, settings)
     _apply_openapi_decode_options(schema, settings)
@@ -417,10 +425,10 @@ def _runtime_openapi_schema(base_schema: dict[str, Any], settings: Settings) -> 
     return schema
 
 
-def _apply_openapi_info(schema: dict[str, Any], settings: Settings) -> None:
+def _apply_openapi_info(schema: dict[str, Any], build_info: BuildInfo) -> None:
     info = schema.get("info")
     if isinstance(info, dict):
-        info["version"] = settings.build.version
+        info["version"] = build_info.version
 
 
 def _apply_openapi_decode_methods(schema: dict[str, Any], settings: Settings) -> None:
