@@ -64,6 +64,12 @@ Decode from a URL:
 curl 'http://localhost:8080/decode?url=https://example.com/image.jpg&types=EAN13,UPCA'
 ```
 
+Decode from a local file URL when deployment policy allows `file://`:
+
+```bash
+curl 'http://localhost:8080/decode?url=file:///data/input/image.png&types=EAN13'
+```
+
 Decode an uploaded file:
 
 ```bash
@@ -126,7 +132,7 @@ decode:
   return_errors: true
 fetch:
   timeout_seconds: 5
-  allowed_url_prefixes: ["https://*.example.com/", "data:*"]
+  allowed_url_prefixes: ["https://*.example.com/", "data:*", "file:///data/input/"]
 media:
   allowed_content_types:
     ["image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp", "image/tiff"]
@@ -162,7 +168,9 @@ Common environment variables:
 
 `allowed_url_prefixes` are matched by parsing URLs. For example,
 `https://*.example.com/` matches `https://cdn.example.com/image.jpg`, but does
-not match `https://test.tld/example.com/image.jpg`.
+not match `https://test.tld/example.com/image.jpg`. `file:///data/input/`
+matches local files under `/data/input/`; only local `file:` URLs with an empty
+host or `localhost` host are supported.
 
 List settings should be supplied as YAML arrays in config files and JSON arrays
 in environment variables, for example `["GET","POST","PUT"]`.
@@ -190,9 +198,10 @@ When enabled, `/mcp` exposes the `decode_url` tool:
 decode_url(url: string, types?: list[BarcodeType]) -> DecodeResult
 ```
 
-`data:image/...;base64,...` URLs are supported. MCP tool errors use MCP error
-semantics and stable domain codes in the message, such as `invalid_url`,
-`disallowed_type`, `resource_timeout`, and `request_too_large`.
+`data:image/...;base64,...` URLs and policy-enabled `file:` URLs are supported.
+MCP tool errors use MCP error semantics and stable domain codes in the message,
+such as `invalid_url`, `disallowed_type`, `resource_timeout`, and
+`request_too_large`.
 
 ## Development
 
