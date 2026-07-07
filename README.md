@@ -126,9 +126,12 @@ decode:
   default_formats: ["EAN13", "EAN8", "UPCA", "UPCE"]
   allowed_formats: ["EAN13", "EAN8", "UPCA", "UPCE", "QRCode", "DataMatrix"]
   request_timeout_seconds: 10
+  max_side: null
   try_rotate: true
   try_downscale: true
   try_invert: false
+  opencv:
+    barcode_detector: true
   return_errors: true
 fetch:
   timeout_seconds: 5
@@ -155,9 +158,11 @@ Common environment variables:
 - `BARCODE_HUB_DECODE__DEFAULT_FORMATS`
 - `BARCODE_HUB_DECODE__ALLOWED_FORMATS`
 - `BARCODE_HUB_DECODE__REQUEST_TIMEOUT_SECONDS`
+- `BARCODE_HUB_DECODE__MAX_SIDE`
 - `BARCODE_HUB_DECODE__TRY_ROTATE`
 - `BARCODE_HUB_DECODE__TRY_DOWNSCALE`
 - `BARCODE_HUB_DECODE__TRY_INVERT`
+- `BARCODE_HUB_DECODE__OPENCV__BARCODE_DETECTOR`
 - `BARCODE_HUB_DECODE__RETURN_ERRORS`
 - `BARCODE_HUB_FETCH__TIMEOUT_SECONDS`
 - `BARCODE_HUB_FETCH__ALLOWED_URL_PREFIXES`
@@ -174,6 +179,16 @@ host or `localhost` host are supported.
 
 List settings should be supplied as YAML arrays in config files and JSON arrays
 in environment variables, for example `["GET","POST","PUT"]`.
+
+`decode.max_side`, when set, resizes the image with Lanczos before the first
+decode attempt if either image side is larger than that value. Response
+coordinates are mapped back to the original image space.
+
+`decode.opencv.barcode_detector` enables a fallback through OpenCV's native
+barcode detector after ZXing-C++ returns no valid barcode. It is enabled by
+default and runs on the same image prepared by `decode.max_side`. OpenCV's
+barcode detector is used for supported linear retail codes; DataMatrix and other
+formats remain handled by ZXing-C++.
 
 ## Metrics
 

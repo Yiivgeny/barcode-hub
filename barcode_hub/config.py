@@ -26,14 +26,20 @@ class LimitsConfig(BaseModel):
     max_image_side_pixels: int = 4096
 
 
+class OpenCvDecodeConfig(BaseModel):
+    barcode_detector: bool = True
+
+
 class DecodeConfig(BaseModel):
     enabled_methods: list[str] = Field(default_factory=lambda: ["GET", "POST", "PUT"])
     default_formats: list[str] = Field(default_factory=lambda: ["EAN13", "EAN8", "UPCA", "UPCE"])
     allowed_formats: list[str] = Field(default_factory=lambda: list(BARCODE_TYPES))
     request_timeout_seconds: float = 10.0
+    max_side: int | None = None
     try_rotate: bool = True
     try_downscale: bool = True
     try_invert: bool = False
+    opencv: OpenCvDecodeConfig = Field(default_factory=OpenCvDecodeConfig)
     return_errors: bool = True
 
     @field_validator("enabled_methods", mode="before")
@@ -53,6 +59,13 @@ class DecodeConfig(BaseModel):
         if isinstance(value, str):
             value = [part.strip() for part in value.split(",") if part.strip()]
         return canonicalize_barcode_types(list(value))
+
+    @field_validator("max_side")
+    @classmethod
+    def max_side_must_be_positive(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("max_side must be positive")
+        return value
 
     @model_validator(mode="after")
     def default_formats_must_be_allowed(self) -> "DecodeConfig":

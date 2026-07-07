@@ -10,6 +10,7 @@ from typing import Any
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 DECODE_SCHEMA_PATH = ROOT / "spec" / "decode-result.schema.json"
 OPENAPI_PATH = ROOT / "spec" / "openapi.yaml"
 GENERATED_START = "    # BEGIN GENERATED DECODE SCHEMAS\n"
