@@ -25,7 +25,7 @@ services:
       BARCODE_HUB_DECODE__TRY_INVERT: "false"
       BARCODE_HUB_DECODE__RETURN_ERRORS: "true"
       BARCODE_HUB_FETCH__TIMEOUT_SECONDS: "5"
-      BARCODE_HUB_FETCH__ALLOWED_URL_PREFIXES: '["http://*","https://*","data:*","file://*"]'
+      BARCODE_HUB_FETCH__ALLOWED_URL_PREFIXES: "http://*, https://*, data:*, file://*"
       BARCODE_HUB_MEDIA__ALLOWED_CONTENT_TYPES: '["image/png","image/jpeg","image/webp","image/gif","image/bmp","image/tiff"]'
       BARCODE_HUB_MCP__ENABLED: "true"
       BARCODE_HUB_LOGGING__FORMAT: "human"

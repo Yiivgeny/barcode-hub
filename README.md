@@ -179,6 +179,10 @@ host or `localhost` host are supported.
 
 List settings should be supplied as YAML arrays in config files and JSON arrays
 in environment variables, for example `["GET","POST","PUT"]`.
+`BARCODE_HUB_FETCH__ALLOWED_URL_PREFIXES` is the exception: supply it as a
+comma-separated string, for example `http://*, https://*, data:*, file://*`.
+Whitespace around entries is trimmed and empty entries from extra commas are
+ignored.
 
 `decode.max_side`, when set, resizes the image with Lanczos before the first
 decode attempt if either image side is larger than that value. Response

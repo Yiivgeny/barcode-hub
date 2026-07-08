@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any, Literal
@@ -13,6 +14,40 @@ from barcode_hub.formats import BARCODE_TYPES, canonicalize_barcode_type, canoni
 
 
 DEFAULT_CONFIG_PATH = "/etc/barcode-hub/config.yaml"
+
+
+def _normalize_string_list(value: Any) -> list[str]:
+    if isinstance(value, str):
+        value = value.split(",")
+    return [part for item in value if (part := str(item).strip())]
+
+
+def _decode_allowed_url_prefixes_env(value: Any) -> list[str]:
+    if not isinstance(value, str):
+        return _normalize_string_list(value)
+    try:
+        decoded = json.loads(value)
+    except ValueError:
+        decoded = value
+    return _normalize_string_list(decoded)
+
+
+def _with_allowed_url_prefixes_env_csv(
+    source: PydanticBaseSettingsSource,
+) -> PydanticBaseSettingsSource:
+    decode_complex_value = getattr(source, "decode_complex_value", None)
+    if decode_complex_value is None:
+        return source
+
+    def decode_complex_value_with_allowed_url_prefixes_csv(
+        field_name: str, field: FieldInfo, value: Any
+    ) -> Any:
+        if field_name.lower() == "allowed_url_prefixes":
+            return _decode_allowed_url_prefixes_env(value)
+        return decode_complex_value(field_name, field, value)
+
+    setattr(source, "decode_complex_value", decode_complex_value_with_allowed_url_prefixes_csv)
+    return source
 
 
 class AppConfig(BaseModel):
@@ -84,9 +119,7 @@ class FetchConfig(BaseModel):
     @field_validator("allowed_url_prefixes", mode="before")
     @classmethod
     def normalize_prefixes(cls, value: Any) -> list[str]:
-        if isinstance(value, str):
-            return [part.strip() for part in value.split(",") if part.strip()]
-        return list(value)
+        return _normalize_string_list(value)
 
 
 class MediaConfig(BaseModel):
@@ -161,8 +194,8 @@ class Settings(BaseSettings):
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         return (
             init_settings,
-            env_settings,
-            dotenv_settings,
+            _with_allowed_url_prefixes_env_csv(env_settings),
+            _with_allowed_url_prefixes_env_csv(dotenv_settings),
             YamlConfigSettingsSource(settings_cls),
             file_secret_settings,
         )
